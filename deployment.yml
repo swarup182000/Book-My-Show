@@ -1,9 +1,7 @@
-apiVersion: apps/v1
+kapiVersion: apps/v1
 kind: Deployment
 metadata:
   name: bms-app
-  labels:
-    app: bms
 spec:
   replicas: 2
   selector:
@@ -16,6 +14,7 @@ spec:
     spec:
       containers:
       - name: bms-container
-        image: 653293365854.dkr.ecr.ap-south-1.amazonaws.com/bookmyshow:BUILD_NUMBER
+        image: 653293365854.dkr.ecr.ap-south-1.amazonaws.com/bookmyshow:latest
         ports:
         - containerPort: 3000
+
