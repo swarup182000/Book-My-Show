@@ -3,8 +3,9 @@ pipeline {
 
     environment {
         AWS_REGION = "ap-south-1"
+        AWS_ACCOUNT_ID = "653293365854"
         ECR_REPO = "653293365854.dkr.ecr.ap-south-1.amazonaws.com/bookmyshow"
-        IMAGE_TAG = "latest"
+        IMAGE_TAG = "${BUILD_NUMBER}"
     }
 
     stages {
@@ -12,27 +13,29 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                url: 'https://github.com/swarup182000/Book-My-Show.git'
+                    url: 'https://github.com/swarup182000/Book-My-Show.git'
             }
         }
 
         stage('Docker Build') {
             steps {
                 sh '''
+                echo "Building Docker Image..."
                 cd bookmyshow-app
                 docker build -t bookmyshow-app .
                 '''
             }
         }
 
-        stage('Login to ECR') {
+        stage('Login to AWS ECR') {
             steps {
                 withCredentials([
-                  [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-creds']
                 ]) {
                     sh '''
                     aws ecr get-login-password --region $AWS_REGION \
-                    | docker login --username AWS --password-stdin $ECR_REPO
+                    | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
                     '''
                 }
             }
@@ -41,7 +44,10 @@ pipeline {
         stage('Push Image to ECR') {
             steps {
                 sh '''
+                echo "Tagging image with build number..."
                 docker tag bookmyshow-app:latest $ECR_REPO:$IMAGE_TAG
+
+                echo "Pushing image to ECR..."
                 docker push $ECR_REPO:$IMAGE_TAG
                 '''
             }
@@ -50,10 +56,26 @@ pipeline {
         stage('Deploy to EKS') {
             steps {
                 sh '''
+                echo "Applying Kubernetes manifests..."
                 kubectl apply -f deployment.yml
                 kubectl apply -f service.yml
+
+                echo "Updating image in running deployment..."
+                kubectl set image deployment/bms-app \
+                bms-container=$ECR_REPO:$IMAGE_TAG
+
+                kubectl rollout status deployment/bms-app
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ CI/CD Pipeline completed successfully!"
+        }
+        failure {
+            echo "❌ Pipeline failed. Check logs."
         }
     }
 }
